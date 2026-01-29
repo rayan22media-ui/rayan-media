@@ -30,9 +30,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ config, onUpdateConfig, users, 
     
     if (success) {
       onUpdateConfig({ ...config, sheetUrl });
-      alert('تم ربط الشيت وتهيئة الهيكلية بنجاح!');
+      alert('✅ تم ربط الشيت بنجاح!');
     } else {
-      alert('فشل الاتصال بالشيت. يرجى التأكد من:\n1. أن النشر (Deployment) تم بخصائص:\n   - Execute as: Me\n   - Who has access: Anyone\n2. الرابط ينتهي بـ /exec');
+      alert('⚠️ فشل الاتصال!\n\nالخطأ الشائع: استلام HTML بدلاً من JSON.\n\nالحل:\n1. اذهب لمحرر السكربت في جوجل.\n2. اضغط Deploy > New Deployment.\n3. تأكد أن "Who has access" هي "Anyone".\n4. استخدم الرابط الجديد.');
     }
     
     setIsSyncing(false);
@@ -63,11 +63,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ config, onUpdateConfig, users, 
           <p className="text-gray-500 text-sm">
             قم بإدخال رابط Google Apps Script Web App ليكون مصدراً للبيانات.
           </p>
-          <div className="bg-blue-50 p-4 rounded-lg text-xs text-blue-800 mb-4 leading-relaxed">
-            <strong>تنبيه هام للتشغيل:</strong> عند عمل New Deployment في جوجل، تأكد من الإعدادات التالية بدقة:<br/>
-            1. Execute as: <strong>Me</strong> (وليس User accessing the web app)<br/>
-            2. Who has access: <strong>Anyone</strong> (وليس Anyone with Google Account)<br/>
-            بدون هذه الإعدادات سيظهر خطأ في الاتصال.
+          <div className="bg-red-50 p-4 rounded-lg text-sm text-red-800 mb-4 leading-relaxed border border-red-100">
+            <strong>⚠️ خطوات هامة جداً قبل الربط:</strong>
+            <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>انسخ الكود الموجود في <code>utils/sheetService.ts</code> وضعه في محرر جوجل.</li>
+                <li>عند عمل <strong>New Deployment</strong>، اختر <strong>Execute as: Me</strong>.</li>
+                <li>اختر <strong>Who has access: Anyone</strong> (مهم جداً لتفادي خطأ HTML).</li>
+            </ul>
           </div>
 
           <div className="flex flex-col md:flex-row gap-4">
