@@ -28,30 +28,41 @@ const App: React.FC = () => {
   const [selectedInvoice, setSelectedInvoice] = useState<Transaction | null>(null);
   const [advice, setAdvice] = useState<string>("");
 
+  // Helper to safely parse JSON
+  const safeJSONParse = (key: string, fallback: any) => {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : fallback;
+    } catch (e) {
+      console.error(`Error parsing ${key} from localStorage`, e);
+      return fallback;
+    }
+  };
+
   // 1. Initialize Data
   useEffect(() => {
     // Check Session
-    const session = localStorage.getItem('story_session');
-    if (session) setCurrentUser(JSON.parse(session));
+    const session = safeJSONParse('story_session', null);
+    if (session) setCurrentUser(session);
 
-    // Load Transactions: Try LocalStorage first, otherwise use INITIAL_TRANSACTIONS from code
-    const savedData = localStorage.getItem('story_accounting_data');
+    // Load Transactions
+    const savedData = safeJSONParse('story_accounting_data', null);
     if (savedData) {
-      setTransactions(JSON.parse(savedData));
+      setTransactions(savedData);
     } else {
       setTransactions(INITIAL_TRANSACTIONS);
     }
 
-    // Load Users: Try LocalStorage first, otherwise use INITIAL_USERS from code
-    const savedUsers = localStorage.getItem('story_users');
+    // Load Users
+    const savedUsers = safeJSONParse('story_users', null);
     if (savedUsers) {
-      setUsers(JSON.parse(savedUsers));
+      setUsers(savedUsers);
     } else {
       setUsers(INITIAL_USERS);
     }
 
-    const savedConfig = localStorage.getItem('story_config');
-    if (savedConfig) setConfig(JSON.parse(savedConfig));
+    const savedConfig = safeJSONParse('story_config', { lastSync: '' });
+    setConfig(savedConfig);
   }, []);
 
   // 2. Persist to LocalStorage on every change (To keep edits during usage)
@@ -110,6 +121,8 @@ const App: React.FC = () => {
 
   const generateFinancialAdvice = async () => {
     const stats = getStats();
+    // Note: In Vite, use import.meta.env.VITE_API_KEY usually, but maintaining process.env as per instructions.
+    // Ensure 'define: { "process.env": process.env }' is in vite.config.ts if using Vite.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
       const response = await ai.models.generateContent({
