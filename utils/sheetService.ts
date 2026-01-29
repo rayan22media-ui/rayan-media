@@ -2,7 +2,7 @@
 import { Transaction, User, TransactionType, UserRole } from '../types';
 
 /* 
-  === كود Google Apps Script الجديد (انسخ هذا الكود وضعه في المحرر) ===
+  === كود Google Apps Script (تأكد من تحديث الكود في محرر جوجل بهذا النص) ===
   
   function doGet(e) {
     return handleRequest(e);
@@ -14,13 +14,15 @@ import { Transaction, User, TransactionType, UserRole } from '../types';
 
   function handleRequest(e) {
     const lock = LockService.getScriptLock();
-    lock.tryLock(10000);
+    // تقليل وقت القفل لتجنب تراكم الطلبات
+    lock.tryLock(5000);
 
     try {
       const doc = SpreadsheetApp.getActiveSpreadsheet();
+      const action = e.parameter.action || (e.postData && JSON.parse(e.postData.contents).action);
       
-      // 1. حالة القراءة (GET) أو طلب الجلب
-      if (e.parameter.action === 'load' || (e.postData && JSON.parse(e.postData.contents).action === 'load')) {
+      // 1. حالة القراءة (GET or POST)
+      if (action === 'load') {
         const transactions = readSheet(doc, 'Transactions');
         const users = readSheet(doc, 'Users');
         
@@ -30,15 +32,15 @@ import { Transaction, User, TransactionType, UserRole } from '../types';
         });
       }
 
-      // 2. حالة الكتابة (POST)
-      const data = JSON.parse(e.postData.contents);
-      if (data.action === 'save') {
+      // 2. حالة الكتابة (POST only)
+      if (action === 'save') {
+        const data = JSON.parse(e.postData.contents);
         saveSheet(doc, 'Transactions', data.transactions);
         saveSheet(doc, 'Users', data.users);
         return createResponse({ status: 'success', message: 'Saved' });
       }
       
-      return createResponse({ status: 'error', message: 'Unknown action' });
+      return createResponse({ status: 'error', message: 'Unknown action: ' + action });
 
     } catch (error) {
       return createResponse({ status: 'error', message: error.toString() });
@@ -51,16 +53,14 @@ import { Transaction, User, TransactionType, UserRole } from '../types';
     const sheet = doc.getSheetByName(sheetName);
     if (!sheet) return [];
     const rows = sheet.getDataRange().getValues();
-    if (rows.length <= 1) return []; // Only headers or empty
-    return rows; // Returns all rows including headers (frontend will slice)
+    if (rows.length <= 1) return []; 
+    return rows;
   }
 
   function saveSheet(doc, sheetName, data) {
     let sheet = doc.getSheetByName(sheetName);
     if (!sheet) sheet = doc.insertSheet(sheetName);
-    
-    sheet.clear(); // Clear all old data
-    
+    sheet.clear(); 
     if (data && data.length > 0) {
       sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
     }
@@ -106,7 +106,7 @@ export const formatUsersForSheet = (users: User[]) => {
       u.id,
       u.name,
       u.email,
-      u.password, // Note: Not secure for production, ok for this demo
+      u.password,
       u.role
     ])
   ];
@@ -142,10 +142,22 @@ export const parseSheetDataToUsers = (rows: any[]): User[] => {
 
 const sanitizeUrl = (url: string) => {
   let clean = url.trim();
-  // If user pasted editor URL by mistake
+  
+  // 1. Fix /edit URL
   if (clean.includes('/edit')) {
     clean = clean.replace(/\/edit.*/, '/exec');
   }
+  
+  // 2. Strip existing params to append fresh ones later
+  if (clean.includes('?')) {
+    clean = clean.split('?')[0];
+  }
+
+  // 3. Ensure ends with /exec
+  if (!clean.endsWith('/exec') && !clean.endsWith('/dev')) {
+    clean = clean.endsWith('/') ? `${clean}exec` : `${clean}/exec`;
+  }
+  
   return clean;
 };
 
@@ -153,35 +165,36 @@ export const loadFromGoogleSheet = async (scriptUrl: string) => {
   if (!scriptUrl) return null;
 
   const cleanUrl = sanitizeUrl(scriptUrl);
-  // Prepare URL with query param. Handle if ? already exists (unlikely for GAS exec but safer)
-  const fetchUrl = cleanUrl.includes('?') 
-    ? `${cleanUrl}&action=load` 
-    : `${cleanUrl}?action=load`;
+  // Use GET with cache busting timestamp
+  const fetchUrl = `${cleanUrl}?action=load&_t=${Date.now()}`;
 
   try {
     const response = await fetch(fetchUrl, {
       method: 'GET',
     });
     
-    // Get text first to check for HTML error pages (Auth/404)
     const text = await response.text();
     
+    // Check for HTML error (Auth/404/Permissions)
     if (text.trim().startsWith('<')) {
-      console.error("Sync Error: Received HTML instead of JSON. Ensure permission is 'Anyone' and URL ends in /exec");
+      console.error("Sync Error (Load): Received HTML. Check Permissions.");
       return null;
     }
 
-    const json = JSON.parse(text);
-    
-    if (json.status === 'success') {
-      return {
-        transactions: parseSheetDataToTransactions(json.data.transactions),
-        users: parseSheetDataToUsers(json.data.users)
-      };
+    try {
+      const json = JSON.parse(text);
+      if (json.status === 'success') {
+        return {
+          transactions: parseSheetDataToTransactions(json.data.transactions),
+          users: parseSheetDataToUsers(json.data.users)
+        };
+      }
+    } catch (e) {
+      console.error("JSON Parse Error:", e, text.substring(0, 100));
     }
     return null;
   } catch (error) {
-    console.error("Load failed:", error);
+    console.error("Load failed (Network):", error);
     return null;
   }
 };
@@ -209,22 +222,25 @@ export const saveToGoogleSheet = async (scriptUrl: string, data: { transactions:
     const text = await response.text();
     
     if (text.trim().startsWith('<')) {
-      console.error("Save Error: Received HTML. Check permissions.");
+      console.error("Save Error: Received HTML. Permissions might be wrong.");
       return false;
     }
 
-    // Optional: Parse JSON to ensure status is success
-    // const json = JSON.parse(text);
-    // return json.status === 'success';
-    
-    return true;
+    try {
+        const json = JSON.parse(text);
+        return json.status === 'success';
+    } catch (e) {
+        // Sometimes GAS returns empty or plain text on success depending on implementation
+        return true; 
+    }
   } catch (error) {
-    console.error("Save failed:", error);
+    console.error("Save failed (Network):", error);
     return false;
   }
 };
 
 export const initializeSheetStructure = async (scriptUrl: string) => {
+  // Test connection by trying to load
   const result = await loadFromGoogleSheet(scriptUrl);
   return !!result;
 };

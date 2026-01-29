@@ -22,12 +22,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ config, onUpdateConfig, users, 
   const [newRole, setNewRole] = useState<UserRole>(UserRole.ADMIN);
 
   const handleSaveConfig = async () => {
+    if (!sheetUrl) return;
+    
     setIsSyncing(true);
     // Simulate initialization
-    await initializeSheetStructure(sheetUrl);
-    onUpdateConfig({ ...config, sheetUrl });
+    const success = await initializeSheetStructure(sheetUrl);
+    
+    if (success) {
+      onUpdateConfig({ ...config, sheetUrl });
+      alert('تم ربط الشيت وتهيئة الهيكلية بنجاح!');
+    } else {
+      alert('فشل الاتصال بالشيت. يرجى التأكد من:\n1. أن النشر (Deployment) تم بخصائص:\n   - Execute as: Me\n   - Who has access: Anyone\n2. الرابط ينتهي بـ /exec');
+    }
+    
     setIsSyncing(false);
-    alert('تم ربط الشيت وتهيئة الهيكلية بنجاح!');
   };
 
   const handleAddUser = (e: React.FormEvent) => {
@@ -53,23 +61,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ config, onUpdateConfig, users, 
         <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-4">🔌 ربط مصدر البيانات (Google Sheets)</h2>
         <div className="space-y-4">
           <p className="text-gray-500 text-sm">
-            قم بإدخال رابط Google Apps Script Web App ليكون مصدراً للبيانات. سيقوم النظام بتهيئة الأعمدة تلقائياً عند الربط.
+            قم بإدخال رابط Google Apps Script Web App ليكون مصدراً للبيانات.
           </p>
+          <div className="bg-blue-50 p-4 rounded-lg text-xs text-blue-800 mb-4 leading-relaxed">
+            <strong>تنبيه هام للتشغيل:</strong> عند عمل New Deployment في جوجل، تأكد من الإعدادات التالية بدقة:<br/>
+            1. Execute as: <strong>Me</strong> (وليس User accessing the web app)<br/>
+            2. Who has access: <strong>Anyone</strong> (وليس Anyone with Google Account)<br/>
+            بدون هذه الإعدادات سيظهر خطأ في الاتصال.
+          </div>
+
           <div className="flex flex-col md:flex-row gap-4">
             <input 
               type="text" 
               value={sheetUrl}
               onChange={(e) => setSheetUrl(e.target.value)}
-              placeholder="https://script.google.com/macros/s/..."
+              placeholder="https://script.google.com/macros/s/.../exec"
               className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#8B1D3D] outline-none text-left"
               dir="ltr"
             />
             <button 
               onClick={handleSaveConfig}
               disabled={isSyncing || !sheetUrl}
-              className="bg-[#12B886] hover:bg-[#0ca678] text-white px-6 py-3 rounded-xl font-bold shadow-sm transition-all disabled:opacity-50 flex items-center gap-2 justify-center"
+              className={`px-6 py-3 rounded-xl font-bold shadow-sm transition-all flex items-center gap-2 justify-center text-white ${
+                isSyncing ? 'bg-gray-400' : 'bg-[#12B886] hover:bg-[#0ca678]'
+              }`}
             >
-              {isSyncing ? 'جاري التهيئة...' : 'ربط وتهيئة الشيت'}
+              {isSyncing ? 'جاري التحقق...' : 'ربط وتهيئة الشيت'}
             </button>
           </div>
           {config.sheetUrl && (
