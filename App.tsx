@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Transaction, TransactionType, User, UserRole, AppConfig } from './types';
 import Dashboard from './components/Dashboard';
 import TransactionForm from './components/TransactionForm';
@@ -8,7 +8,8 @@ import InvoiceView from './components/InvoiceView';
 import Sidebar from './components/Sidebar';
 import Login from './components/Login';
 import AdminPanel from './components/AdminPanel';
-import { saveToGoogleSheet, loadFromGoogleSheet } from './utils/sheetService';
+import { exportToCSV } from './utils/sheetService';
+import { INITIAL_TRANSACTIONS, INITIAL_USERS } from './data'; // استيراد البيانات المحلية
 import { GoogleGenAI } from "@google/genai";
 
 const App: React.FC = () => {
@@ -19,8 +20,6 @@ const App: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [config, setConfig] = useState<AppConfig>({
-    sheetUrl: '',
-    googleSheetId: '',
     lastSync: ''
   });
 
@@ -28,68 +27,42 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'add' | 'history' | 'admin'>('dashboard');
   const [selectedInvoice, setSelectedInvoice] = useState<Transaction | null>(null);
   const [advice, setAdvice] = useState<string>("");
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'loading' | 'success' | 'error'>('idle');
 
-  // 1. Initialize Data from LocalStorage
+  // 1. Initialize Data
   useEffect(() => {
+    // Check Session
     const session = localStorage.getItem('story_session');
     if (session) setCurrentUser(JSON.parse(session));
 
+    // Load Transactions: Try LocalStorage first, otherwise use INITIAL_TRANSACTIONS from code
     const savedData = localStorage.getItem('story_accounting_data');
-    if (savedData) setTransactions(JSON.parse(savedData));
+    if (savedData) {
+      setTransactions(JSON.parse(savedData));
+    } else {
+      setTransactions(INITIAL_TRANSACTIONS);
+    }
 
+    // Load Users: Try LocalStorage first, otherwise use INITIAL_USERS from code
     const savedUsers = localStorage.getItem('story_users');
-    if (savedUsers) setUsers(JSON.parse(savedUsers));
+    if (savedUsers) {
+      setUsers(JSON.parse(savedUsers));
+    } else {
+      setUsers(INITIAL_USERS);
+    }
 
     const savedConfig = localStorage.getItem('story_config');
     if (savedConfig) setConfig(JSON.parse(savedConfig));
   }, []);
 
-  // 2. Load from Sheet on Startup (if Config exists and user is logged in)
+  // 2. Persist to LocalStorage on every change (To keep edits during usage)
   useEffect(() => {
-    if (currentUser && config.sheetUrl) {
-      handleManualSync();
-    }
-  }, [currentUser]); // Run once when user logs in
-
-  // 3. Persist to LocalStorage on every change
-  useEffect(() => {
-    if (currentUser) {
+    // We only save if we have data loaded to avoid overwriting with empty arrays on first render
+    if (transactions.length > 0 || users.length > 0) {
       localStorage.setItem('story_accounting_data', JSON.stringify(transactions));
       localStorage.setItem('story_users', JSON.stringify(users));
       localStorage.setItem('story_config', JSON.stringify(config));
     }
-  }, [transactions, users, config, currentUser]);
-
-  // 4. Debounced Auto-Save to Google Sheet
-  useEffect(() => {
-    if (!currentUser || !config.sheetUrl) return;
-
-    const timeoutId = setTimeout(() => {
-      setSyncStatus('saving');
-      saveToGoogleSheet(config.sheetUrl, { transactions, users })
-        .then((success) => {
-          setSyncStatus(success ? 'success' : 'error');
-          setTimeout(() => setSyncStatus('idle'), 3000);
-        });
-    }, 2000); // Wait 2 seconds after last change
-
-    return () => clearTimeout(timeoutId);
-  }, [transactions, users, config.sheetUrl]);
-
-  const handleManualSync = async () => {
-    if (!config.sheetUrl) return;
-    setSyncStatus('loading');
-    const data = await loadFromGoogleSheet(config.sheetUrl);
-    if (data) {
-      setTransactions(data.transactions);
-      setUsers(data.users);
-      setSyncStatus('success');
-    } else {
-      setSyncStatus('error');
-    }
-    setTimeout(() => setSyncStatus('idle'), 3000);
-  };
+  }, [transactions, users, config]);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
@@ -179,27 +152,13 @@ const App: React.FC = () => {
             <p className="text-gray-500 mt-1">إدارة مالية احترافية لشركة Story Creative Studio</p>
           </div>
           <div className="flex gap-3">
-             {config.sheetUrl && (
-                <button
-                  onClick={handleManualSync}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${
-                    syncStatus === 'error' ? 'bg-red-100 text-red-600' : 
-                    syncStatus === 'success' ? 'bg-green-100 text-green-600' :
-                    'bg-white border border-gray-200 hover:bg-gray-50'
-                  }`}
-                  disabled={syncStatus === 'loading' || syncStatus === 'saving'}
-                >
-                  {syncStatus === 'loading' || syncStatus === 'saving' ? (
-                    <span className="animate-spin">⌛</span>
-                  ) : syncStatus === 'success' ? (
-                    <span>✅ تم الحفظ</span>
-                  ) : syncStatus === 'error' ? (
-                     <span>⚠️ خطأ اتصال</span>
-                  ) : (
-                    <span>🔄 مزامنة</span>
-                  )}
-                </button>
-             )}
+             <button
+               onClick={() => exportToCSV(transactions)}
+               className="px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all bg-green-600 hover:bg-green-700 text-white shadow-sm"
+             >
+               <span>📥</span>
+               تصدير Excel
+             </button>
             {activeTab === 'dashboard' && (
               <button 
                 onClick={generateFinancialAdvice}

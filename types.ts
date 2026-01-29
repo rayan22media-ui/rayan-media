@@ -36,7 +36,5 @@ export interface User {
 }
 
 export interface AppConfig {
-  sheetUrl: string;
-  googleSheetId: string;
   lastSync: string;
 }

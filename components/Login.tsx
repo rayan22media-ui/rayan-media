@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { User, UserRole } from '../types';
+import { User } from '../types';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -18,29 +18,18 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
     setError('');
     setLoading(true);
 
-    // Simulate network delay
+    // Simulate network delay for better UX
     setTimeout(() => {
-      // 1. Check Super Admin Hardcoded Credentials
-      if (email === 'admin@rayan2media.com' && password === '546884') {
-        onLogin({
-          id: 'super_admin_01',
-          name: 'مدير النظام (Rayan Media)',
-          email: email,
-          role: UserRole.SUPER_ADMIN
-        });
-        setLoading(false);
-        return;
-      }
-
-      // 2. Check Local/Sheet Users
+      // البحث عن المستخدم في القائمة الممررة (التي تأتي من data.ts)
       const foundUser = users.find(u => u.email === email && u.password === password);
+      
       if (foundUser) {
         onLogin(foundUser);
       } else {
         setError('بيانات الدخول غير صحيحة');
       }
       setLoading(false);
-    }, 800);
+    }, 600);
   };
 
   return (

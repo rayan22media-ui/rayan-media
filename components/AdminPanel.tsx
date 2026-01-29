@@ -1,7 +1,6 @@
 
 import React, { useState } from 'react';
 import { AppConfig, User, UserRole } from '../types';
-import { initializeSheetStructure } from '../utils/sheetService';
 
 interface AdminPanelProps {
   config: AppConfig;
@@ -12,31 +11,11 @@ interface AdminPanelProps {
 }
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ config, onUpdateConfig, users, onAddUser, onDeleteUser }) => {
-  const [sheetUrl, setSheetUrl] = useState(config.sheetUrl || '');
-  const [isSyncing, setIsSyncing] = useState(false);
-  
   // User Form State
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<UserRole>(UserRole.ADMIN);
-
-  const handleSaveConfig = async () => {
-    if (!sheetUrl) return;
-    
-    setIsSyncing(true);
-    // Simulate initialization
-    const success = await initializeSheetStructure(sheetUrl);
-    
-    if (success) {
-      onUpdateConfig({ ...config, sheetUrl });
-      alert('✅ تم ربط الشيت بنجاح!');
-    } else {
-      alert('⚠️ فشل الاتصال!\n\nالخطأ الشائع: استلام HTML بدلاً من JSON.\n\nالحل:\n1. اذهب لمحرر السكربت في جوجل.\n2. اضغط Deploy > New Deployment.\n3. تأكد أن "Who has access" هي "Anyone".\n4. استخدم الرابط الجديد.');
-    }
-    
-    setIsSyncing(false);
-  };
 
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,48 +36,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ config, onUpdateConfig, users, 
 
   return (
     <div className="space-y-8 animate-fade-in">
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-        <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-4">🔌 ربط مصدر البيانات (Google Sheets)</h2>
-        <div className="space-y-4">
-          <p className="text-gray-500 text-sm">
-            قم بإدخال رابط Google Apps Script Web App ليكون مصدراً للبيانات.
-          </p>
-          <div className="bg-red-50 p-4 rounded-lg text-sm text-red-800 mb-4 leading-relaxed border border-red-100">
-            <strong>⚠️ خطوات هامة جداً قبل الربط:</strong>
-            <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>انسخ الكود الموجود في <code>utils/sheetService.ts</code> وضعه في محرر جوجل.</li>
-                <li>عند عمل <strong>New Deployment</strong>، اختر <strong>Execute as: Me</strong>.</li>
-                <li>اختر <strong>Who has access: Anyone</strong> (مهم جداً لتفادي خطأ HTML).</li>
-            </ul>
-          </div>
-
-          <div className="flex flex-col md:flex-row gap-4">
-            <input 
-              type="text" 
-              value={sheetUrl}
-              onChange={(e) => setSheetUrl(e.target.value)}
-              placeholder="https://script.google.com/macros/s/.../exec"
-              className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#8B1D3D] outline-none text-left"
-              dir="ltr"
-            />
-            <button 
-              onClick={handleSaveConfig}
-              disabled={isSyncing || !sheetUrl}
-              className={`px-6 py-3 rounded-xl font-bold shadow-sm transition-all flex items-center gap-2 justify-center text-white ${
-                isSyncing ? 'bg-gray-400' : 'bg-[#12B886] hover:bg-[#0ca678]'
-              }`}
-            >
-              {isSyncing ? 'جاري التحقق...' : 'ربط وتهيئة الشيت'}
-            </button>
-          </div>
-          {config.sheetUrl && (
-            <div className="text-xs text-green-600 font-bold bg-green-50 p-2 rounded inline-block">
-              ✅ متصل حالياً
-            </div>
-          )}
-        </div>
-      </div>
-
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4">👥 إدارة المستخدمين والمدراء</h2>
         
